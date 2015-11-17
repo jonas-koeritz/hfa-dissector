@@ -8,7 +8,8 @@ local f_msgtype = ProtoField.uint8("hfa.msgtype", "Message Type", base.HEX)
 p_hfa.fields = { f_length, f_msgtype }
 
 local msg_types = {
-	[0x20] = { "hfa_request", "Request" },
+	[0x04] = { "hfa_register", "Register" },
+	[0x20] = { "hfa_request", "Stimulus Request" },
 	[0x28] = { "hfa_alive_request", "Alive Request" },
 	[0x2a] = { 'hfa_alive_response', "Alive Response" },
 	[0x31] = { "hfa_set_media", "Set Payload" }
@@ -48,10 +49,12 @@ p_alive_request = Proto("hfa_alive_request", "Alive Request")
 p_alive_request.fields.timestamp = ProtoField.absolute_time("hfa.alive_request.timestamp", "Timestamp", FT_ABSOLUTE_TIME)
 
 function p_alive_request.dissector(buf, pinfo, root)
-	if buf:len() > 0 then
+	pinfo.cols['info'] = "Alive Request"
+	if buf:len() == 3 then
+		pinfo.cols['info'] = "Alive Request (Startup)"
+	elseif buf:len() > 0 then
 		root:add(p_alive_request.fields.timestamp, buf(6, 4))
 	end
-	pinfo.cols['info'] = "Alive Request"
 end
 
 p_alive_response = Proto("hfa_alive_response", "Alive Response")
@@ -65,13 +68,19 @@ p_request = Proto("hfa_request", "Request")
 p_request.fields.request_type = ProtoField.uint8("hfa.request.type", "Request Type", base.HEX)
 
 local request_types = {
+	[0x01] = { "Control Key Module", "request_control_keymodule" },
 	[0x40] = { "Key Control", "request_key" },
 	[0x41] = { "Hookswitch Off-Hook"},
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
 	[0x45] = { "Ringer", "request_ringer" },
 	[0x54] = { "Set Audio", "request_set_audio" },
-	[0x5b] = { "Set Ringer Volume", "request_set_ringer_volume" }
+	[0x5b] = { "Set Ringer Volume", "request_set_ringer_volume" },
+	[0x5e] = { "Setup Menu", "request_setup_menu" },
+	[0x60] = { "Part Number", "request_part_number" },
+	[0x6b] = { "Set FPK Text", "request_set_fpk_text" },
+	[0x6e] = { "Set FPK Level", "request_set_fpk_level" },
+	[0x72] = { "Set Menu Item", "request_set_menu_item" }
 };
 
 function p_request.dissector(buf, pinfo, root)
@@ -143,6 +152,8 @@ VALS_KEYS = {
 	[0x08] = "8",
 	[0x09] = "9",
 	[0x0a] = "0",
+	[0x0b] = "*",
+	[0x0c] = "#",
 	[0x0d] = "VOL+",
 	[0x0e] = "VOL-",
 	[0x0f] = "<",
@@ -210,7 +221,7 @@ function p_set_audio.dissector(buf, pinfo, root)
 	local flags = root:add(p_set_audio.fields.flags, buf(0, 1), buf(0, 1):uint())
 	flags:add(p_set_audio.fields.flag_mic_mute, buf(0, 1))
 	root:add(p_set_audio.fields.volume, buf(1, 1), ((buf(1, 1):uint() % 0x10) + 1))
-	pinfo.cols['info'] = "Set Audio [volume=" .. ((buf(1, 1):uint() % 0x10) + 1) .. ", microphone=" .. VALS_MIC_MUTE[buf(0, 1):uint()] .. "]"
+	pinfo.cols['info'] = "Set Audio [volume=" .. ((buf(1, 1):uint() % 0x10) + 1) .. "]"
 end
 
 p_set_ringer_volume = Proto("request_set_ringer_volume", "Set Ringer Volume")
@@ -238,6 +249,147 @@ function p_ringer.dissector(buf, pinfo, root)
 		status = "Off"
 	end
 	pinfo.cols['info'] = "Ringer " .. status
+end
+
+p_set_fpk_level = Proto("request_set_fpk_level", "Set FPK Level")
+p_set_fpk_level.fields.level = ProtoField.uint8("hfa.fpk_level.level", "Level")
+
+function p_set_fpk_level.dissector(buf, pinfo, root)
+	pinfo.cols['info'] = "Set FPK Level " .. buf(0, 1):uint()
+	root:add(p_set_fpk_level.fields.level, buf(0, 1))
+end
+
+p_set_fpk_text = Proto("request_set_fpk_text", "Set FPK Text")
+p_set_fpk_text.fields.level = ProtoField.uint8("hfa.fpk_text.level", "Level")
+p_set_fpk_text.fields.key = ProtoField.uint8("hfa.fpk_text.key", "Key")
+p_set_fpk_text.fields.key_index = ProtoField.uint8("hfa.fpk_text.index", "Index")
+p_set_fpk_text.fields.key_length = ProtoField.uint8("hfa.fpk_text.length", "Length")
+p_set_fpk_text.fields.key_text = ProtoField.string("hfa.fpk_text.text", "Text", FT_STRING)
+
+function p_set_fpk_text.dissector(buf, pinfo, root)
+	root = root:add(p_set_fpk_text.fields.level, buf(0, 1))
+	pinfo.cols['info'] = "Set FPK Text - Level " .. buf(0, 1):uint()
+	local i = 1
+	while i < buf:len() do
+		local index = buf(i, 1):uint() - 0x11
+		local length = buf(i + 1, 1):uint()
+		local key = root:add(p_set_fpk_text.fields.key, buf(i, length + 2), index)
+		key:add(p_set_fpk_text.fields.key_index, buf(i, 1), index)
+		key:add(p_set_fpk_text.fields.key_length, buf(i + 1, 1), length)
+		if length > 0 then
+			key:add(p_set_fpk_text.fields.key_text, buf(i + 2, length))
+			key:append_text(" - " .. buf(i + 2, length):string())
+		end
+		i = i + length + 2
+	end
+end
+
+p_control_keymodule = Proto("request_control_keymodule", "Set Keymodule Text")
+p_control_keymodule.fields.level = ProtoField.uint8("hfa.keymodule_text.level", "Level")
+p_control_keymodule.fields.module = ProtoField.uint8("hfa.keymodule_text.module", "Module")
+p_control_keymodule.fields.key = ProtoField.uint8("hfa.keymodule_text.key", "Key")
+p_control_keymodule.fields.key_index = ProtoField.uint8("hfa.keymodule_text.index", "Index")
+p_control_keymodule.fields.key_length = ProtoField.uint8("hfa.keymodule_text.length", "Length")
+p_control_keymodule.fields.key_text = ProtoField.string("hfa.keymodule_text.text", "Text", FT_STRING)
+
+function p_control_keymodule.dissector(buf, pinfo, root)
+	if buf(0, 1):uint() == 0x11 then -- Keymodule Key Press
+		root:add(p_control_keymodule.fields.key, buf(1, 1), buf(1, 1):uint() - 0x40)
+		pinfo.cols['info'] = "Keymodule Key Press " .. buf(1, 1):uint() - 0x40
+	elseif buf(0, 1):uint() == 0x12 then -- set Keymodule text
+		pinfo.cols['info'] = "Set Keymodule Text"
+		root:add(p_control_keymodule.fields.module, buf(0, 1), buf(0, 1):uint() - 0x11)
+		root = root:add(p_control_keymodule.fields.level, buf(1, 1))
+		local i = 2
+		while i < buf:len() do
+			local index = buf(i, 1):uint()
+			local length = buf(i + 1, 1):uint()
+			local key = root:add(p_control_keymodule.fields.key, buf(i, length + 2), index)
+			key:add(p_control_keymodule.fields.key_index, buf(i, 1), index)
+			key:add(p_control_keymodule.fields.key_length, buf(i + 1, 1), length)
+			if length > 0 then
+				key:add(p_control_keymodule.fields.key_text, buf(i + 2, length))
+				key:append_text(" - " .. buf(i + 2, length):string())
+			end
+			i = i + length + 2
+		end
+	end
+end
+
+p_setup_menu = Proto("request_setup_menu", "Setup Menu")
+p_setup_menu.fields.num_items = ProtoField.uint8("hfa.setup_menu.num_items", "Item Count")
+p_setup_menu.fields.itemid = ProtoField.uint8("hfa.setup_menu.itemid", "Menu Item ID")
+
+function p_setup_menu.dissector(buf, pinfo, root)
+	local numItems = buf(0, 1):uint()
+	local menu = root:add(p_setup_menu.fields.num_items, buf(0, 1), numItems)
+	local i = 0
+	while i < numItems do
+		menu:add(p_setup_menu.fields.itemid, buf(i * 2 + 1, 2), buf(i * 2 + 2, 1):uint())
+		i = i + 1
+	end
+end
+
+p_set_menu_item = Proto("request_set_menu_item", "Set Menu Item")
+p_set_menu_item.fields.item = ProtoField.uint8("hfa.menu_item", "Menu Item")
+p_set_menu_item.fields.length = ProtoField.uint8("hfa.menu_item.length", "Length")
+p_set_menu_item.fields.key_text = ProtoField.string("hfa.menu_item.text", "Text", FT_STRING)
+
+function p_set_menu_item.dissector(buf, pinfo, root)
+	local infoText = "Set Menu Item"
+	local i = 0
+	while i < buf:len() do
+		local itemid = buf(i + 1, 1):uint()
+		local item_length = buf(i + 2, 1):uint()
+		local item = root:add(p_set_menu_item.fields.item, buf(i, item_length + 3), buf(i + 1, 1):uint())
+		item:add(p_set_menu_item.fields.length, buf(i + 2, 1))
+		item:add(p_set_menu_item.fields.key_text, buf(i + 3, item_length))
+		infoText = infoText .. " " .. itemid .. ": " .. buf(i + 3, item_length):string()
+		i = i + item_length + 3
+	end
+
+	pinfo.cols['info'] = infoText
+end
+
+p_hfa_register = Proto("hfa_register", "Register")
+p_hfa_register.fields.information_element = ProtoField.uint8("hfa.register.information_element", "Information Element", base.HEX)
+p_hfa_register.fields.information_element_length = ProtoField.uint16("hfa.register.information_element.length", "Length")
+p_hfa_register.fields.mac_address = ProtoField.bytes("hfa.register.mac_address", "MAC-Address")
+p_hfa_register.fields.subscriber_number = ProtoField.string("hfa.register.subscriber_number", "Subscriber Number", FT_STRING)
+p_hfa_register.fields.ip_address = ProtoField.string("hfa.register.ip_address", "IP-Address", FT_STRING)
+
+function p_hfa_register.dissector(buf, pinfo, root)
+	pinfo.cols["info"] = "Register"
+	local i = 0
+	while i < buf:len() do
+		local item_type = buf(i, 1):uint()
+		local item_len = buf(i + 1, 2):uint()
+
+		local item = root:add(p_hfa_register.fields.information_element, buf(i, item_len + 3), item_type)
+		item:add(p_hfa_register.fields.information_element_length, buf(i + 1, 2))
+		if item_type == 0x01 then -- Device IP-Address
+			item:append_text(" (Device IP-Address)")
+			item:add(p_hfa_register.fields.ip_address, buf(i + 4, item_len - 1))
+		elseif item_type == 0x72 then -- Subscriber Number
+			item:append_text(" (Subscriber Number)")
+			item:add(p_hfa_register.fields.subscriber_number, buf(i + 4, item_len - 1))
+			pinfo.cols["info"] = "Register " .. buf(i + 4, item_len - 1):string()
+		elseif item_type == 0x7f then -- MAC-Address
+			item:append_text(" (MAC-Address)")
+			item:add(p_hfa_register.fields.mac_address, buf(i + 3, item_len))
+		else
+			item:add_expert_info(PI_UNDECODED, PI_WARN, "Unknown Item Type")
+		end
+		i = i + item_len + 3
+	end
+end
+
+p_request_part_number = Proto("request_part_number", "Part Number")
+p_request_part_number.fields.partnumber = ProtoField.string("hfa.part_number.partnumber", "Part Number", FT_STRING)
+
+function p_request_part_number.dissector(buf, pinfo, root)
+	root:add(p_request_part_number.fields.partnumber, buf(0))
+	pinfo.cols['info'] = "Part Number " .. buf(0):string()
 end
 
 function toBits(num,bits)
