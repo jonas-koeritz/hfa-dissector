@@ -335,10 +335,16 @@ function p_set_menu_item.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = infoText
 end
 
+local VALS_TON = {
+	[0x91] = "E.164 International, ISDN/telephony numbering plan",
+	[0x81] = "Unknown, ISDN/telephony numbering plan"
+}
+
 p_hfa_register = Proto("hfa_register", "Register")
 p_hfa_register.fields.information_element = ProtoField.uint8("hfa.register.information_element", "Information Element", base.HEX)
 p_hfa_register.fields.information_element_length = ProtoField.uint16("hfa.register.information_element.length", "Length")
 p_hfa_register.fields.mac_address = ProtoField.bytes("hfa.register.mac_address", "MAC-Address")
+p_hfa_register.fields.subscriber_ton = ProtoField.uint8("hfa.register.subscriber_ton", "Type of Number", base.HEX, VALS_TON)
 p_hfa_register.fields.subscriber_number = ProtoField.string("hfa.register.subscriber_number", "Subscriber Number", FT_STRING)
 p_hfa_register.fields.ip_address = ProtoField.string("hfa.register.ip_address", "IP-Address", FT_STRING)
 
@@ -356,6 +362,7 @@ function p_hfa_register.dissector(buf, pinfo, root)
 			item:add(p_hfa_register.fields.ip_address, buf(i + 4, item_len - 1))
 		elseif item_type == 0x72 then -- Subscriber Number
 			item:append_text(" (Subscriber Number)")
+			item:add(p_hfa_register.fields.subscriber_ton, buf(i + 3, 1))
 			item:add(p_hfa_register.fields.subscriber_number, buf(i + 4, item_len - 1))
 			pinfo.cols["info"] = "Register " .. buf(i + 4, item_len - 1):string()
 		elseif item_type == 0x7f then -- MAC-Address
