@@ -12,6 +12,7 @@ local msg_types = {
 	[0x20] = { "hfa_request", "Stimulus Request" },
 	[0x28] = { "hfa_alive_request", "Alive Request" },
 	[0x2a] = { 'hfa_alive_response', "Alive Response" },
+	[0x30] = { 'hfa_codec_capabilities', "Codec Capabilities" },
 	[0x31] = { "hfa_set_media", "Set Payload" }
 };
 
@@ -427,13 +428,61 @@ function p_request_start_tone.dissector(buf, pinfo, root)
 	local f3 = frequencies:add(p_request_start_tone.fields.freq3, buf(3, 1), buf(3, 1):uint() * 60)
 	f3:append_text(" (Approximation)")
 
-	local pulses = root:add(p_request_start_tone.fields.pulses, buf(4, 6), "Pulses")
+	local pulses = root:add(p_request_start_tone.fields.pulses, buf(4, buf:len() - 4), "Pulses")
 	pulses:add(p_request_start_tone.fields.pulse1, buf(4, 1), buf(4, 1):uint() * 25)
 	pulses:add(p_request_start_tone.fields.pause1, buf(5, 1), buf(5, 1):uint() * 25)
-	pulses:add(p_request_start_tone.fields.pulse2, buf(6, 1), buf(6, 1):uint() * 25)
-	pulses:add(p_request_start_tone.fields.pause2, buf(7, 1), buf(7, 1):uint() * 25)
-	pulses:add(p_request_start_tone.fields.pulse3, buf(8, 1), buf(8, 1):uint() * 25)
-	pulses:add(p_request_start_tone.fields.pause3, buf(9, 1), buf(9, 1):uint() * 25)
+
+	if buf:len() > 7 then
+		pulses:add(p_request_start_tone.fields.pulse2, buf(6, 1), buf(6, 1):uint() * 25)
+		pulses:add(p_request_start_tone.fields.pause2, buf(7, 1), buf(7, 1):uint() * 25)
+		pulses:add(p_request_start_tone.fields.pulse3, buf(8, 1), buf(8, 1):uint() * 25)
+		pulses:add(p_request_start_tone.fields.pause3, buf(9, 1), buf(9, 1):uint() * 25)
+	end
+end
+
+local VALS_SILENCE_SUPPRESSION = {
+	[0x00] = "Off",
+	[0x01] = "On"
+}
+
+local VALS_CODECS = {
+	[0x00] = "PCMU (G.711 u-Law)",
+	[0x08] = "PCMA (G.711 A-Law)",
+	[0x09] = "G.722",
+	[0x12] = "G.729",
+}
+
+p_codec_preferences = Proto("hfa_codec_capabilities", "Codec Capabilities")
+p_codec_preferences.fields.codec = ProtoField.string("hfa.codec_capabilities.codec", "Codec")
+p_codec_preferences.fields.length = ProtoField.uint16("hfa.codec_capabilities.length", "Length", base.DEC)
+p_codec_preferences.fields.audio_codec = ProtoField.uint8("hfa.codec_capabilities.codec", "Codec", base.HEX, VALS_CODECS)
+p_codec_preferences.fields.packet_size = ProtoField.uint8("hfa.codec_capabilities.packet_size", "Packet Size (ms)", base.DEC)
+p_codec_preferences.fields.silence_supp = ProtoField.uint8("hfa.codec_capabilities.silence_supp", "Silence Suppression", base.HEX, VALS_SILENCE_SUPPRESSION, 0x01)
+
+p_codec_preferences.fields.rtp_base = ProtoField.uint16("hfa.codec_capabilities.rtp_base", "RTP Base", base.DEC)
+p_codec_preferences.fields.rtcp_port = ProtoField.uint16("hfa.codec_capabilities.rtcp_port", "RTCP Port", base.DEC)
+
+p_codec_preferences.fields.local_address = ProtoField.string("hfa.codec_capabilities.local_address", "Local Address", FT_STRINGZ)
+
+function p_codec_preferences.dissector(buf, pinfo, root)
+	pinfo.cols['info'] = "Codec Capabilities"
+
+	local i = 0
+	while i < buf:len() do
+		local length = buf(i + 1, 2):uint()
+		local codec = root:add(p_codec_preferences.fields.codec, buf(i, length + 3), "Codec definition")
+
+		codec:add(p_codec_preferences.fields.length, buf(i + 1, 2), length)
+
+		codec:add(p_codec_preferences.fields.audio_codec, buf(i + 5, 1))
+
+		codec:add(p_codec_preferences.fields.packet_size, buf(i + 7, 1))
+		codec:add(p_codec_preferences.fields.silence_supp, buf(i + 8, 1))
+		codec:add(p_codec_preferences.fields.rtp_base, buf(i + 9, 2))
+		codec:add(p_codec_preferences.fields.rtcp_port, buf(i + 11, 2))
+		codec:add(p_codec_preferences.fields.local_address, buf(i + 19, length - 16))
+		i = i + length + 3
+	end
 end
 
 function toBits(num,bits)
