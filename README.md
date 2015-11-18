@@ -1,18 +1,9 @@
 # hfa-dissector
 Wireshark Lua dissector for the Siemens/Unify CorNet-IP (HFA) protocol
 
-# What is working and what
+# Current status
 
-- [X] Basic Packet dissection
-  - [X] Decode Key Presses
-  - [X] Decode Display Updates
-  - [X] Decode Stimulus Menus
-  - [X] Decode basic device control commands
-- [X] Basic Stimulus Packet dissection
-  - [ ] Understand the complete Stimulus protocol
-- [ ] Understand all message types
-- [ ] Understand the HFA Login/Register process
-
+See the [Wiki](https://github.com/jonas-koeritz/hfa-dissector/wiki)
 
 # How to use
 
