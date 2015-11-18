@@ -374,15 +374,63 @@ function p_request_part_number.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Part Number " .. buf(0):string()
 end
 
+local VALS_MODE = {
+	[0x00] = "F1 - F1 - F1",
+	[0x01] = "F1+F2 - F1+F2 - F1+F2",
+	[0x10] = "F1 - F2 - F3",
+	[0x11] = "F1 - F2+F3 - F1"
+}
+
+local VALS_LOOP = {
+	[0x00] = "Single-Shot",
+	[0x01] = "Loop"	
+}
+
+local VALS_VOLUME = {
+	[0x0D] = "Damping 0",
+	[0x0A] = "Damping 1",
+	[0x07] = "Damping 2",
+	[0x00] = "Damping 3"
+}
+
 p_request_start_tone = Proto("request_start_tone", "Start Tone-Generation")
-p_request_start_tone.fields.freq1 = ProtoField.uint8("hfa.tone_generator.freq1", "Frequence Index 1", base.HEX)
-p_request_start_tone.fields.freq2 = ProtoField.uint8("hfa.tone_generator.freq2", "Frequence Index 2", base.HEX)
-p_request_start_tone.fields.freq3 = ProtoField.uint8("hfa.tone_generator.freq3", "Frequence Index 3", base.HEX)
+p_request_start_tone.fields.flags = ProtoField.uint8("hfa.tone_generator.flags", "Flags", base.HEX)
+p_request_start_tone.fields.mode = ProtoField.uint8("hfa.tone_generator.flags.mode", "Mode", base.HEX, VALS_MODE, 0xC0, "Mode")
+p_request_start_tone.fields.loop = ProtoField.uint8("hfa.tone_generator.flags.loop", "Loop", base.HEX, VALS_LOOP, 0x20, "Loop")
+p_request_start_tone.fields.volume = ProtoField.uint8("hfa.tone_generator.volume", "Volume", base.DEC, VALS_VOLUME, 0x0F, "Volume")
+
+p_request_start_tone.fields.frequencies = ProtoField.string("hfa.tone_generator.frequencies", "Frequencies", FT_STRING)
+p_request_start_tone.fields.freq1 = ProtoField.uint8("hfa.tone_generator.freq1", "Frequency 1", base.DEC)
+p_request_start_tone.fields.freq2 = ProtoField.uint8("hfa.tone_generator.freq2", "Frequency 2", base.DEC)
+p_request_start_tone.fields.freq3 = ProtoField.uint8("hfa.tone_generator.freq3", "Frequency 3", base.DEC)
+
+p_request_start_tone.fields.pulses = ProtoField.string("hfa.tone_generator.pulses", "Pulses", FT_STRING)
+p_request_start_tone.fields.pulse1 = ProtoField.uint8("hfa.tone_generator.pulse1", "Pulse 1 (ms)", base.DEC)
+p_request_start_tone.fields.pause1 = ProtoField.uint8("hfa.tone_generator.pause1", "Pause 1 (ms)", base.DEC)
+p_request_start_tone.fields.pulse2 = ProtoField.uint8("hfa.tone_generator.pulse2", "Pulse 2 (ms)", base.DEC)
+p_request_start_tone.fields.pause2 = ProtoField.uint8("hfa.tone_generator.pause2", "Pause 2 (ms)", base.DEC)
+p_request_start_tone.fields.pulse3 = ProtoField.uint8("hfa.tone_generator.pulse3", "Pulse 3 (ms)", base.DEC)
+p_request_start_tone.fields.pause3 = ProtoField.uint8("hfa.tone_generator.pause3", "Pause 3 (ms)", base.DEC)
+
 
 function p_request_start_tone.dissector(buf, pinfo, root)
-	root:add(p_request_start_tone.fields.freq1, buf(1, 1))
-	root:add(p_request_start_tone.fields.freq2, buf(2, 1))
-	root:add(p_request_start_tone.fields.freq3, buf(3, 1))
+	local flags = root:add(p_request_start_tone.fields.flags, buf(0, 1))
+	flags:add(p_request_start_tone.fields.mode, buf(0, 1))
+	flags:add(p_request_start_tone.fields.loop, buf(0, 1))
+	flags:add(p_request_start_tone.fields.volume, buf(0, 1))
+
+	local frequencies = root:add(p_request_start_tone.fields.frequencies, buf(1, 3), "Frequencies (Hz)")
+	frequencies:add(p_request_start_tone.fields.freq1, buf(1, 1), buf(1, 1):uint() * 60)
+	frequencies:add(p_request_start_tone.fields.freq2, buf(2, 1), buf(2, 1):uint() * 60)
+	frequencies:add(p_request_start_tone.fields.freq3, buf(3, 1), buf(3, 1):uint() * 60)
+
+	local pulses = root:add(p_request_start_tone.fields.pulses, buf(4, 6), "Pulses")
+	pulses:add(p_request_start_tone.fields.pulse1, buf(4, 1), buf(4, 1):uint() * 25)
+	pulses:add(p_request_start_tone.fields.pause1, buf(5, 1), buf(5, 1):uint() * 25)
+	pulses:add(p_request_start_tone.fields.pulse2, buf(6, 1), buf(6, 1):uint() * 25)
+	pulses:add(p_request_start_tone.fields.pause2, buf(7, 1), buf(7, 1):uint() * 25)
+	pulses:add(p_request_start_tone.fields.pulse3, buf(8, 1), buf(8, 1):uint() * 25)
+	pulses:add(p_request_start_tone.fields.pause3, buf(9, 1), buf(9, 1):uint() * 25)
 end
 
 function toBits(num,bits)
