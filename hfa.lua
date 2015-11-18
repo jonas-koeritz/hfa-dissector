@@ -9,6 +9,7 @@ p_hfa.fields = { f_length, f_msgtype }
 
 local msg_types = {
 	[0x04] = { "hfa_register", "Register" },
+	[0x06] = { "hfa_register_response", "Register Response" },
 	[0x20] = { "hfa_request", "Stimulus Request" },
 	[0x28] = { "hfa_alive_request", "Alive Request" },
 	[0x2a] = { 'hfa_alive_response', "Alive Response" },
@@ -52,7 +53,7 @@ p_alive_request.fields.timestamp = ProtoField.absolute_time("hfa.alive_request.t
 function p_alive_request.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Alive Request"
 	if buf:len() == 3 then
-		pinfo.cols['info'] = "Alive Request (Startup)"
+		pinfo.cols['info'] = "Alive Request (Status Message)"
 	elseif buf:len() > 0 then
 		root:add(p_alive_request.fields.timestamp, buf(6, 4))
 	end
@@ -481,6 +482,26 @@ function p_codec_preferences.dissector(buf, pinfo, root)
 		codec:add(p_codec_preferences.fields.rtp_base, buf(i + 9, 2))
 		codec:add(p_codec_preferences.fields.rtcp_port, buf(i + 11, 2))
 		codec:add(p_codec_preferences.fields.local_address, buf(i + 19, length - 16))
+		i = i + length + 3
+	end
+end
+
+p_register_response = Proto("hfa_register_response", "Register Response")
+p_register_response.fields.parameter = ProtoField.uint8("hfa.register_response.parameter", "Parameter", base.HEX)
+p_register_response.fields.param_length = ProtoField.uint16("hfa.register_response.param_length", "Length", base.DEC)
+p_register_response.fields.param_value = ProtoField.bytes("hfa.register_response.param_value", "Value")
+
+function p_register_response.dissector(buf, pinfo, root)
+	pinfo.cols['info'] = "Register Response"
+	local i = 0
+
+	while i < buf:len() do
+		local length = buf(i + 1, 2):uint()
+		local param = root:add(p_register_response.fields.parameter, buf(i, length + 3), buf(i, 1):uint())
+		param:add(p_register_response.fields.param_length, buf(i + 1, 2))
+
+		param:add(p_register_response.fields.param_value, buf(i + 3, length))
+
 		i = i + length + 3
 	end
 end
