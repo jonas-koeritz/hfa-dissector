@@ -73,8 +73,9 @@ local request_types = {
 	[0x41] = { "Hookswitch Off-Hook"},
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
-	[0x45] = { "Ringer", "request_ringer" },
 	[0x54] = { "Set Audio", "request_set_audio" },
+	[0x58] = { "Start Tone-Generation", "request_start_tone" },
+	[0x59] = { "Stop Tone-Generation" },
 	[0x5b] = { "Set Ringer Volume", "request_set_ringer_volume" },
 	[0x5e] = { "Setup Menu", "request_setup_menu" },
 	[0x60] = { "Part Number", "request_part_number" },
@@ -232,25 +233,6 @@ function p_set_ringer_volume.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Set Ringer Volume " .. (buf(0, 1):uint() + 1)
 end
 
-VALS_RINGER = {
-	[0x00] = "Off",
-	[0x01] = "On"
-}
-
-p_ringer = Proto("request_ringer", "Ringer")
-p_ringer.fields.on = ProtoField.uint8("hfa.ringer.on", "Ringer", base.DEC, VALS_RINGER, 0x01, "Ringer")
-
-function p_ringer.dissector(buf, pinfo, root)
-	root:add(p_ringer.fields.on, buf(0, 1))
-	local status = ""
-	if bit.band(buf(0, 1):uint(), 0x01) == 0x01 then
-		status = "On"
-	else
-		status = "Off"
-	end
-	pinfo.cols['info'] = "Ringer " .. status
-end
-
 p_set_fpk_level = Proto("request_set_fpk_level", "Set FPK Level")
 p_set_fpk_level.fields.level = ProtoField.uint8("hfa.fpk_level.level", "Level")
 
@@ -390,6 +372,17 @@ p_request_part_number.fields.partnumber = ProtoField.string("hfa.part_number.par
 function p_request_part_number.dissector(buf, pinfo, root)
 	root:add(p_request_part_number.fields.partnumber, buf(0))
 	pinfo.cols['info'] = "Part Number " .. buf(0):string()
+end
+
+p_request_start_tone = Proto("request_start_tone", "Start Tone-Generation")
+p_request_start_tone.fields.freq1 = ProtoField.uint8("hfa.tone_generator.freq1", "Frequence Index 1", base.HEX)
+p_request_start_tone.fields.freq2 = ProtoField.uint8("hfa.tone_generator.freq2", "Frequence Index 2", base.HEX)
+p_request_start_tone.fields.freq3 = ProtoField.uint8("hfa.tone_generator.freq3", "Frequence Index 3", base.HEX)
+
+function p_request_start_tone.dissector(buf, pinfo, root)
+	root:add(p_request_start_tone.fields.freq1, buf(1, 1))
+	root:add(p_request_start_tone.fields.freq2, buf(2, 1))
+	root:add(p_request_start_tone.fields.freq3, buf(3, 1))
 end
 
 function toBits(num,bits)
