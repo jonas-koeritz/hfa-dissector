@@ -390,14 +390,14 @@ local VALS_VOLUME = {
 	[0x0D] = "Damping 0",
 	[0x0A] = "Damping 1",
 	[0x07] = "Damping 2",
-	[0x00] = "Damping 3"
+	[0x10] = "Damping 3"
 }
 
 p_request_start_tone = Proto("request_start_tone", "Start Tone-Generation")
 p_request_start_tone.fields.flags = ProtoField.uint8("hfa.tone_generator.flags", "Flags", base.HEX)
 p_request_start_tone.fields.mode = ProtoField.uint8("hfa.tone_generator.flags.mode", "Mode", base.HEX, VALS_MODE, 0xC0, "Mode")
 p_request_start_tone.fields.loop = ProtoField.uint8("hfa.tone_generator.flags.loop", "Loop", base.HEX, VALS_LOOP, 0x20, "Loop")
-p_request_start_tone.fields.volume = ProtoField.uint8("hfa.tone_generator.volume", "Volume", base.DEC, VALS_VOLUME, 0x0F, "Volume")
+p_request_start_tone.fields.volume = ProtoField.uint8("hfa.tone_generator.volume", "Volume", base.DEC, VALS_VOLUME, 0x1F, "Volume")
 
 p_request_start_tone.fields.frequencies = ProtoField.string("hfa.tone_generator.frequencies", "Frequencies", FT_STRING)
 p_request_start_tone.fields.freq1 = ProtoField.uint8("hfa.tone_generator.freq1", "Frequency 1 (Hz)", base.DEC)
