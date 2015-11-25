@@ -10,6 +10,7 @@ p_hfa.fields = { f_length, f_msgtype }
 local msg_types = {
 	[0x04] = { "hfa_register", "Register" },
 	[0x06] = { "hfa_register_response", "Register Response" },
+	[0x07] = { "hfa_register_decline", "Register Decline" },
 	[0x20] = { "hfa_request", "Stimulus Request" },
 	[0x28] = { "hfa_alive_request", "Alive Request" },
 	[0x2a] = { 'hfa_alive_response', "Alive Response" },
@@ -391,6 +392,9 @@ p_hfa_register.fields.mac_address = ProtoField.bytes("hfa.register.mac_address",
 p_hfa_register.fields.subscriber_ton = ProtoField.uint8("hfa.register.subscriber_ton", "Type of Number", base.HEX, VALS_TON)
 p_hfa_register.fields.subscriber_number = ProtoField.string("hfa.register.subscriber_number", "Subscriber Number", FT_STRING)
 p_hfa_register.fields.ip_address = ProtoField.string("hfa.register.ip_address", "IP-Address", FT_STRING)
+p_hfa_register.fields.timestamp = ProtoField.absolute_time("hfa.register.timestamp", "Timestamp", FT_ABSOLUTE_TIME)
+p_hfa_register.fields.pw_hash = ProtoField.bytes("hfa.register.pw_hash", "Password Hash")
+p_hfa_register.fields.client_version = ProtoField.string("hfa.register.client_version", "Client Version", FT_STRING)
 
 function p_hfa_register.dissector(buf, pinfo, root)
 	pinfo.cols["info"] = "Register"
@@ -412,6 +416,11 @@ function p_hfa_register.dissector(buf, pinfo, root)
 		elseif item_type == 0x7f then -- MAC-Address
 			item:append_text(" (MAC-Address)")
 			item:add(p_hfa_register.fields.mac_address, buf(i + 3, item_len))
+		elseif item_type == 0x0e then -- Registration Data
+			item:append_text(" (Registration Data)")
+			item:add(p_hfa_register.fields.timestamp, buf(i + 33, 4))
+			item:add(p_hfa_register.fields.pw_hash, buf(i + 41, 20))
+			item:add(p_hfa_register.fields.client_version, buf(i + 61, item_len - 58))
 		else
 			item:add_expert_info(PI_UNDECODED, PI_WARN, "Unknown Item Type")
 		end
