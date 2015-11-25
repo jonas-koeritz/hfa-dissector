@@ -75,6 +75,7 @@ local request_types = {
 	[0x41] = { "Hookswitch Off-Hook"},
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
+	[0x47] = { "Set Contrast", "request_set_contrast" },
 	[0x54] = { "Set Audio", "request_set_audio" },
 	[0x58] = { "Start Tone-Generation", "request_start_tone" },
 	[0x59] = { "Stop Tone-Generation" },
@@ -382,6 +383,21 @@ function p_request_part_number.dissector(buf, pinfo, root)
 	root:add(p_request_part_number.fields.partnumber, buf(0))
 	pinfo.cols['info'] = "Part Number " .. buf(0):string()
 end
+
+p_set_contrast = Proto("request_set_contrast", "Set Contrast")
+p_set_contrast.fields.display_contrast = ProtoField.uint8("hfa.set_contrast.display_contrast", "Display Contrast", base.HEX)
+p_set_contrast.fields.keys_contrast = ProtoField.uint8("hfa.set_contrast.keys_contrast", "Keys Contrast", base.HEX)
+
+function p_set_contrast.dissector(buf, pinfo, root)
+	local display_contrast = buf(0, 1):uint() + 1
+	local keys_contrast = buf(1, 1):uint() + 1
+
+	root:add(p_set_contrast.fields.display_contrast, buf(0, 1), display_contrast)
+	root:add(p_set_contrast.fields.keys_contrast, buf(1, 1), keys_contrast)
+
+	pinfo.cols['info'] = "Set Contrast: display=" .. display_contrast .. ", keys=" .. keys_contrast
+end
+
 
 local VALS_MODE = {
 	[0x00] = "F1 - F1 - F1",
