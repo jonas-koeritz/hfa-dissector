@@ -144,10 +144,12 @@ p_set_display.fields.display_col = ProtoField.uint8("hfa.set_display.col", "Colu
 p_set_display.fields.display_content = ProtoField.string("hfa.set_display.content", "Content", FT_STRING)
 
 function p_set_display.dissector(buf, pinfo, root)
+	local row = buf(0, 1):uint()
+	local col = buf(1, 1):uint()
 	root:add(p_set_display.fields.display_row, buf(0, 1))
 	root:add(p_set_display.fields.display_col, buf(1, 1))
 	root:add(p_set_display.fields.display_content, buf(3), "\"" .. buf(3):string() .. "\"")
-	pinfo.cols['info'] = "Set Display [row=" .. buf(0, 1) .. ", col=" .. buf(1, 1) .. "]: " .. buf(3):string()
+	pinfo.cols['info'] = "Set Display [row=" .. row .. ", col=" .. col .. "]: " .. buf(3):string()
 end
 
 VALS_KEYS = {
@@ -281,8 +283,11 @@ p_show_clock.fields.id = ProtoField.uint8("hfa.clock.id", "ID", base.HEX)
 
 
 function p_show_clock.dissector(buf, pinfo, root)
-	root:add(p_show_clock.fields.row, buf(0, 1))
-	root:add(p_show_clock.fields.col, buf(1, 1))
+	local row = buf(0, 1):uint()
+	local col = buf(1, 1):uint()
+	pinfo.cols['info'] = "Show Clock [row=" .. row .. ", col=" .. col .. "]"
+	root:add(p_show_clock.fields.row, buf(0, 1), row)
+	root:add(p_show_clock.fields.col, buf(1, 1), col)
 	root:add(p_show_clock.fields.id, buf(2, 1))
 end
 
@@ -511,8 +516,16 @@ p_request_start_ringer.fields.pulse2 = ProtoField.uint8("hfa.ringer.pulse2", "Pu
 p_request_start_ringer.fields.pause2 = ProtoField.uint8("hfa.ringer.pause2", "Pause 2", base.DEC)
 
 function p_request_start_ringer.dissector(buf, pinfo, root)
-	root:add(p_request_start_ringer.fields.volume, buf(0, 1), buf(0, 1):uint() - 0x90 + 1)
-	root:add(p_request_start_ringer.fields.sound, buf(1, 1), buf(1, 1):uint() - 0x30 + 1)
+	local volume = buf(0, 1):uint() - 0x90 + 1
+	local sound = buf(1, 1):uint() - 0x30 + 1
+	if volume > 0 and sound > 0 then
+		root:add(p_request_start_ringer.fields.volume, buf(0, 1), buf(0, 1):uint() - 0x90 + 1)
+		root:add(p_request_start_ringer.fields.sound, buf(1, 1), buf(1, 1):uint() - 0x30 + 1)
+	else
+		root:add(p_request_start_ringer.fields.volume, buf(0, 1), buf(0, 1):uint())
+		root:add(p_request_start_ringer.fields.sound, buf(1, 1), buf(1, 1):uint())
+		pinfo.cols['info'] = "Information Tone"
+	end
 	root:add(p_request_start_ringer.fields.pulse1, buf(2, 1), buf(2, 1):uint() * 50)
 	root:add(p_request_start_ringer.fields.pause1, buf(3, 1), buf(3, 1):uint() * 50)
 	if buf:len() > 4 then 
