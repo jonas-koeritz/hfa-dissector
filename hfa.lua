@@ -77,6 +77,8 @@ local request_types = {
 	[0x43] = { "Set Display", "request_set_display" },
 	[0x47] = { "Set Contrast", "request_set_contrast" },
 	[0x54] = { "Set Audio", "request_set_audio" },
+	[0x55] = { "Start Ringer", "request_start_ringer" },
+	[0x56] = { "Stop Ringer" },
 	[0x58] = { "Start Tone-Generation", "request_start_tone" },
 	[0x59] = { "Stop Tone-Generation" },
 	[0x5b] = { "Set Ringer Volume", "request_set_ringer_volume" },
@@ -463,6 +465,26 @@ function p_request_start_tone.dissector(buf, pinfo, root)
 		pulses:add(p_request_start_tone.fields.pause3, buf(9, 1), buf(9, 1):uint() * 25)
 	end
 end
+
+p_request_start_ringer = Proto("request_start_ringer", "Start Ringer")
+p_request_start_ringer.fields.volume = ProtoField.uint8("hfa.ringer.volume", "Volume", base.DEC)
+p_request_start_ringer.fields.sound = ProtoField.uint8("hfa.ringer.sound", "Sound", base.DEC)
+p_request_start_ringer.fields.pulse1 = ProtoField.uint8("hfa.ringer.pulse1", "Pulse 1", base.DEC)
+p_request_start_ringer.fields.pause1 = ProtoField.uint8("hfa.ringer.pause1", "Pause 1", base.DEC)
+p_request_start_ringer.fields.pulse2 = ProtoField.uint8("hfa.ringer.pulse2", "Pulse 2", base.DEC)
+p_request_start_ringer.fields.pause2 = ProtoField.uint8("hfa.ringer.pause2", "Pause 2", base.DEC)
+
+function p_request_start_ringer.dissector(buf, pinfo, root)
+	root:add(p_request_start_ringer.fields.volume, buf(0, 1), buf(0, 1):uint() - 0x90 + 1)
+	root:add(p_request_start_ringer.fields.sound, buf(1, 1), buf(1, 1):uint() - 0x30 + 1)
+	root:add(p_request_start_ringer.fields.pulse1, buf(2, 1), buf(2, 1):uint() * 50)
+	root:add(p_request_start_ringer.fields.pause1, buf(3, 1), buf(3, 1):uint() * 50)
+	if buf:len() > 4 then 
+		root:add(p_request_start_ringer.fields.pulse2, buf(4, 1), buf(4, 1):uint() * 50)
+		root:add(p_request_start_ringer.fields.pause2, buf(5, 1), buf(5, 1):uint() * 50)
+	end
+end
+
 
 local VALS_SILENCE_SUPPRESSION = {
 	[0x00] = "Off",
