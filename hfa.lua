@@ -76,6 +76,7 @@ local request_types = {
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
 	[0x47] = { "Set Contrast", "request_set_contrast" },
+	[0x4a] = { "Set Time Format", "request_set_time_format" },
 	[0x54] = { "Set Audio", "request_set_audio" },
 	[0x55] = { "Start Ringer", "request_start_ringer" },
 	[0x56] = { "Stop Ringer" },
@@ -269,6 +270,18 @@ function p_set_fpk_text.dissector(buf, pinfo, root)
 		end
 		i = i + length + 2
 	end
+end
+
+local VALS_24H = {
+	[0x01] = "12 Hours",
+	[0x02] = "24 Hours"	
+};
+
+
+p_set_time_format = Proto("request_set_time_format", "Set Time Format")
+p_set_time_format.fields.twentyfourhours = ProtoField.uint8("hfa.time_format.twentyfourhours", "24h Format", base.HEX, VALS_24H)
+function p_set_time_format.dissector(buf, pinfo, root)
+	root:add(p_set_time_format.fields.twentyfourhours, buf(0, 1))
 end
 
 p_control_keymodule = Proto("request_control_keymodule", "Set Keymodule Text")
