@@ -76,6 +76,8 @@ local request_types = {
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
 	[0x47] = { "Set Contrast", "request_set_contrast" },
+	[0x48] = { "Show Clock", "request_show_clock" },
+	[0x49] = { "Hide Clock", "request_hide_clock" },
 	[0x4a] = { "Set Time Format", "request_set_time_format" },
 	[0x54] = { "Set Audio", "request_set_audio" },
 	[0x55] = { "Start Ringer", "request_start_ringer" },
@@ -271,6 +273,27 @@ function p_set_fpk_text.dissector(buf, pinfo, root)
 		i = i + length + 2
 	end
 end
+
+p_show_clock = Proto("request_show_clock", "Show Clock")
+p_show_clock.fields.row = ProtoField.uint8("hfa.clock.row", "Row", base.DEC)
+p_show_clock.fields.col = ProtoField.uint8("hfa.clock.col", "Column", base.DEC)
+p_show_clock.fields.id = ProtoField.uint8("hfa.clock.id", "ID", base.HEX)
+
+
+function p_show_clock.dissector(buf, pinfo, root)
+	root:add(p_show_clock.fields.row, buf(0, 1))
+	root:add(p_show_clock.fields.col, buf(1, 1))
+	root:add(p_show_clock.fields.id, buf(2, 1))
+end
+
+p_hide_clock = Proto("request_hide_clock", "Hide Clock")
+p_hide_clock.fields.id = ProtoField.uint8("hfa.clock.id", "ID", base.HEX)
+
+function p_hide_clock.dissector(buf, pinfo, root)
+	root:add(p_hide_clock.fields.id, buf(0, 1))
+end
+
+
 
 local VALS_24H = {
 	[0x01] = "12 Hours",
