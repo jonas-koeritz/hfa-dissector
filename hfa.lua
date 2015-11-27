@@ -54,7 +54,7 @@ p_alive_request.fields.timestamp = ProtoField.absolute_time("hfa.alive_request.t
 function p_alive_request.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Alive Request"
 	if buf:len() == 3 then
-		pinfo.cols['info'] = "Alive Request (Status Message)"
+		pinfo.cols['info'] = "Alive Request (Timestamp Request)"
 	elseif buf:len() > 0 then
 		root:add(p_alive_request.fields.timestamp, buf(6, 4))
 	end
