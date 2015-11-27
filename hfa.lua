@@ -609,6 +609,34 @@ function p_register_response.dissector(buf, pinfo, root)
 	end
 end
 
+local VALS_REGISTER_DECLINE_CAUSE = {
+};
+
+p_register_decline = Proto("hfa_register_decline", "Register Decline")
+
+p_register_decline.fields.cause = ProtoField.uint8("hfa.register_decline.cause", "Cause", base.HEX, VALS_REGISTER_DECLINE_CAUSE)
+p_register_decline.fields.item = ProtoField.uint8("hfa.register_decline.item", "Item", base.HEX)
+p_register_decline.fields.length = ProtoField.uint16("hfa.register_decline.length", "Length", base.DEC)
+
+function p_register_decline.dissector(buf, pinfo, root)
+	pinfo.cols['info'] = "Register Decline"
+	local i = 0
+
+	while i < buf:len() do
+		local length = buf(i + 1, 2):uint()
+		local item_type = buf(i, 1):uint()
+
+		local item = root:add(p_register_decline.fields.item, buf(i, 1), item_type)
+		if item_type == 0x08 then
+			item:append_text(" (Cause)")
+			item:add(p_register_decline.fields.length, buf(i + 1, 2))
+			item:add(p_register_decline.fields.cause, buf(i + 3, 1), buf(i + 3, 1):uint())
+		end
+		i = i + length + 3
+	end
+end
+
+
 function toBits(num,bits)
     -- returns a table of bits, most significant first.
     bits = bits or select(2,math.frexp(num))
