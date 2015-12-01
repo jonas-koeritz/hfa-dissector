@@ -1,7 +1,7 @@
 # hfa-dissector
 Wireshark Lua dissector for the Siemens/Unify CorNet-IP (HFA) protocol
 
-#### Current status
+#### Current status and Documentation
 
 See the [Wiki](https://github.com/jonas-koeritz/hfa-dissector/wiki)
 
