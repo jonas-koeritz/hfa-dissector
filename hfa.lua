@@ -61,9 +61,13 @@ function p_alive_request.dissector(buf, pinfo, root)
 end
 
 p_alive_response = Proto("hfa_alive_response", "Alive Response")
+p_alive_response.fields.timestamp = ProtoField.absolute_time("hfa.alive_response.timestamp", "Timestamp", FT_ABSOLUTE_TIME)
 
 function p_alive_response.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Alive Response"
+	if buf:len() > 0 then
+		root:add(p_alive_request.fields.timestamp, buf(6, 4))
+	end
 end
 
 p_request = Proto("hfa_request", "Request")
@@ -79,7 +83,7 @@ local request_types = {
 	[0x47] = { "Set Contrast", "request_set_contrast" },
 	[0x48] = { "Show Clock", "request_show_clock" },
 	[0x49] = { "Hide Clock", "request_hide_clock" },
-	[0x4a] = { "Set Time Format", "request_set_time_format" },
+	[0x4a] = { "Set Clock", "request_set_clock" },
 	[0x54] = { "Set Audio", "request_set_audio" },
 	[0x55] = { "Start Ringer", "request_start_ringer" },
 	[0x56] = { "Stop Ringer" },
@@ -307,10 +311,19 @@ local VALS_24H = {
 };
 
 
-p_set_time_format = Proto("request_set_time_format", "Set Time Format")
-p_set_time_format.fields.twentyfourhours = ProtoField.uint8("hfa.time_format.twentyfourhours", "24h Format", base.HEX, VALS_24H)
-function p_set_time_format.dissector(buf, pinfo, root)
-	root:add(p_set_time_format.fields.twentyfourhours, buf(0, 1))
+p_set_clock = Proto("request_set_clock", "Set Clock")
+p_set_clock.fields.twentyfourhours = ProtoField.uint8("hfa.set_clock.twentyfourhours", "24h Format", base.HEX, VALS_24H)
+p_set_clock.fields.seconds = ProtoField.uint8("hfa.set_clock.seconds", "Seconds", base.DEC);
+p_set_clock.fields.minutes = ProtoField.uint8("hfa.set_clock.minutes", "Minutes", base.DEC);
+p_set_clock.fields.hours = ProtoField.uint8("hfa.set_clock.hours", "Hours", base.DEC);
+
+function p_set_clock.dissector(buf, pinfo, root)
+	root:add(p_set_clock.fields.twentyfourhours, buf(0, 1))
+	root:add(p_set_clock.fields.seconds, buf(1, 1));
+	root:add(p_set_clock.fields.minutes, buf(2, 1));
+	root:add(p_set_clock.fields.hours, buf(3, 1));
+
+	pinfo.cols['info'] = "Set Clock: " .. buf(3, 1):uint() .. ":" .. buf(2, 1):uint() .. ":" .. buf(1, 1):uint()
 end
 
 p_control_keymodule = Proto("request_control_keymodule", "Set Keymodule Text")
