@@ -80,25 +80,52 @@ local request_types = {
 	[0x41] = { "Hookswitch Off-Hook"},
 	[0x42] = { "Hookswitch On-Hook"},
 	[0x43] = { "Set Display", "request_set_display" },
+	[0x45] = { "Clear Display Range", "request_clear_display" },
+	[0x46] = { "Phone Initialization Request", "phone_init_request" },
 	[0x47] = { "Set Contrast", "request_set_contrast" },
 	[0x48] = { "Show Clock", "request_show_clock" },
 	[0x49] = { "Hide Clock", "request_hide_clock" },
 	[0x4a] = { "Set Clock", "request_set_clock" },
+	[0x4b] = { "Basic Phone Initialization", "request_phone_init_basic" },
+	[0x4c] = { "Extended Phone Initialization" },
+	[0x4d] = { "Audio State Indication", "audio_state_indication" },
+	[0x53] = { "Audio State Request" },
 	[0x54] = { "Set Audio", "request_set_audio" },
 	[0x55] = { "Start Ringer", "request_start_ringer" },
 	[0x56] = { "Stop Ringer" },
 	[0x58] = { "Start Tone-Generation", "request_start_tone" },
 	[0x59] = { "Stop Tone-Generation" },
 	[0x5b] = { "Set Ringer Volume", "request_set_ringer_volume" },
+	[0x5c] = { "Handsfree Mode", "handsfree_mode" },
 	[0x5e] = { "Setup Menu", "request_setup_menu" },
 	[0x60] = { "Part Number", "request_part_number" },
 	[0x6b] = { "Set FPK Text", "request_set_fpk_text" },
 	[0x6e] = { "Set FPK Level", "request_set_fpk_level" },
-	[0x72] = { "Set Menu Item", "request_set_menu_item" }
+	[0x72] = { "Set Menu Item", "request_set_menu_item" },
+	[0x7d] = { "IP Phone Init Data", "request_ip_phone_init_data" },
+	[0x7e] = { "X-Link Container" }
 };
+
+VALS_REPEATER_TERMINATOR = {
+	[0x00] = "Terminator",
+	[0x01] = "Repeater"
+}
+
+VALS_PHONE_OPTION_SELECT = {
+	[0x01] = "Phone"
+}
+
+p_request.fields.repeater_terminator = ProtoField.uint8("p_request.fields.repeater_terminator", "Repeater/Terminator", base.HEX, VALS_REPEATER_TERMINATOR, 0x80)
+p_request.fields.phone_option_select = ProtoField.uint8("p_request.fields.phone_option_select", "Phone Option Select", base.HEX, VALS_PHONE_OPTION_SELECT, 0x40)
+p_request.fields.message_type = ProtoField.uint8("p_request.fields.message_type", "Message Type", base.HEX, nil, 0x3F)
+
 
 function p_request.dissector(buf, pinfo, root)
 	local request_type = root:add(p_request.fields.request_type, buf(0, 1), buf(0, 1):uint())
+	root:add(p_request.fields.repeater_terminator, buf(0, 1))
+	root:add(p_request.fields.phone_option_select, buf(0, 1))
+	root:add(p_request.fields.message_type, buf(0, 1))
+
 	if request_types[buf(0, 1):uint()] ~= nil then
 		request_type:append_text(" (" .. request_types[buf(0, 1):uint()][1] .. ")")
 		pinfo.cols['info'] = request_types[buf(0, 1):uint()][1]
@@ -110,6 +137,16 @@ function p_request.dissector(buf, pinfo, root)
 		request_type:add_expert_info(PI_UNDECODED, PI_WARN, "Unknown Request Type")
 		pinfo.cols['info'] = "Unknown Request Type 0x" .. buf(0, 1)
 	end
+end
+
+VALS_ROOM_CHARACTERISTICS = {
+	[0x00] = "Normal"
+}
+
+p_handsfree_mode = Proto("handsfree_mode", "Handsfree Mode")
+p_handsfree_mode.fields.room_characteristics = ProtoField.uint8("hfa.handsfree_mode.room_characteristics", "Room Characteristics", base.HEX, VALS_ROOM_CHARACTERISTICS, 0x03)
+function p_handsfree_mode.dissector(buf, pinfo, root)
+	root:add(p_handsfree_mode.fields.room_characteristics, buf(0, 1))
 end
 
 local VALS_DIRECTION = {
@@ -141,6 +178,182 @@ function p_set_media.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Set Payload [local_port=" .. buf(9, 2):uint() .. ", local_address=" .. buf(19):stringz() .. "]"
 end
 
+p_request_clear_display = Proto("request_clear_display", "Clear Display Range")
+p_request_clear_display.fields.row = ProtoField.uint8("hfa.clear_display.row", "Row", base.DEC)
+p_request_clear_display.fields.column = ProtoField.uint8("hfa.clear_display.column", "Column", base.DEC)
+p_request_clear_display.fields.length = ProtoField.uint8("hfa.clear_display.length", "Length", base.DEC)
+
+function p_request_clear_display.dissector(buf, pinfo, root)
+	root:add(p_request_clear_display.fields.row, buf(0, 1))
+	root:add(p_request_clear_display.fields.column, buf(1, 1))
+	root:add(p_request_clear_display.fields.length, buf(2, 1))
+end
+
+VALS_AS_HEADSET_CONNECTED = {
+	[0x00] = "No headset connected",
+	[0x01] = "Headset connected"
+}
+
+VALS_AS_HOOKSTATE = {
+	[0x00] = "On Hook",
+	[0x01] = "Off Hook"
+}
+
+p_audio_state_indication = Proto("audio_state_indication", "Audio State Indication")
+p_audio_state_indication.fields.headset_connected = ProtoField.uint8("hfa.audio_state_indication.headset_connected", "Headset connected", base.HEX, VALS_AS_HEADSET_CONNECTED, 0x80)
+p_audio_state_indication.fields.hook_state = ProtoField.uint8("hfa.audio_state_indication.hook_state", "Hook State", base.HEX, VALS_AS_HOOKSTATE, 0x40)
+p_audio_state_indication.fields.bchannel = ProtoField.uint8("hfa.audio_state_indication.bchannel", "B-Channel", base.DEC, nil, 0x30)
+p_audio_state_indication.fields.audio_state = ProtoField.uint8("hfa.audio_state_indication.bchannel", "Audio State", base.HEX, nil, 0x0F)
+
+
+function p_audio_state_indication.dissector(buf, pinfo, root)
+	root:add(p_audio_state_indication.fields.headset_connected, buf(0, 1))
+	root:add(p_audio_state_indication.fields.hook_state, buf(0, 1))
+	root:add(p_audio_state_indication.fields.bchannel, buf(0, 1))
+	root:add(p_audio_state_indication.fields.audio_state, buf(0, 1))
+end
+
+VALS_ACOUSTIC_FILTER = {
+	[0x00] = "NET33/Europe"
+}
+
+VALS_LANGUAGE = {
+	[0x02] = "German"
+}
+
+VALS_KEY_CLICK_STATE = {
+	[0x00] = "deactivated"
+}
+
+VALS_TIME_FORMAT = {
+	[0x00] = "12h",
+	[0x01] = "24h"
+}
+
+VALS_TIME_DATA_VALID = {
+	[0x00] = "valid",
+	[0x01] = "invalid"
+}
+
+VALS_INIT_EXTENDED_FOLLOWS = {
+	[0x00] = "No extended phone initialization following",
+	[0x01] = "Extended phone initialization follows"
+}
+
+VALS_AUDIO_STATE_MODE = {
+	[0x00] = "audio state mode"	
+}
+
+VALS_VISION2000_SUPPORT = {
+	[0x00] = "no",
+	[0x01] = "yes"
+}
+
+p_request_phone_init_basic = Proto("request_phone_init_basic", "Basic Phone Initialization")
+p_request_phone_init_basic.fields.acoustic_filter = ProtoField.uint8("hfa.phone_init_basic.acoustic_filter", "Acoustic Filter", base.HEX, VALS_ACOUSTIC_FILTER, 0xF0)
+p_request_phone_init_basic.fields.language = ProtoField.uint8("hfa.phone_init_basic.language", "Language", base.HEX, VALS_LANGUAGE, 0x0F)
+p_request_phone_init_basic.fields.key_click_state = ProtoField.uint8("hfa.phone_init_basic.key_click_state", "Key Click State", base.HEX, VALS_KEY_CLICK_STATE, 0xF0)
+p_request_phone_init_basic.fields.time_format = ProtoField.uint8("hfa.phone_init_basic.time_format", "Time Format", base.HEX, VALS_TIME_FORMAT, 0x08)
+p_request_phone_init_basic.fields.display_contrast = ProtoField.uint8("hfa.phone_init_basic.display_contrast", "Display Contrast", base.DEC, nil, 0x07)
+p_request_phone_init_basic.fields.time_data_valid = ProtoField.uint8("hfa.phone_init_basic.time_data_valid", "Time Data Valid", base.HEX, VALS_TIME_DATA_VALID, 0x40)
+p_request_phone_init_basic.fields.seconds = ProtoField.uint8("hfa.phone_init_basic.seconds", "Seconds", base.DEC, nil, 0x3F)
+p_request_phone_init_basic.fields.minutes = ProtoField.uint8("hfa.phone_init_basic.minutes", "Minutes", base.DEC, nil, 0x3F)
+p_request_phone_init_basic.fields.phone_init_extended_follows = ProtoField.uint8("hfa.phone_init_basic.phone_init_extended_follows", "Extended Phone Initialization follows", base.HEX, VALS_INIT_EXTENDED_FOLLOWS, 0x80)
+p_request_phone_init_basic.fields.hours = ProtoField.uint8("hfa.phone_init_basic.hours", "Hours", base.DEC, nil, 0x1F)
+p_request_phone_init_basic.fields.label_contrast = ProtoField.uint8("hfa.phone_init_basic.label_contrast", "Phone Label Contrast", base.DEC, nil, 0x1C)
+p_request_phone_init_basic.fields.audio_state_mode = ProtoField.uint8("hfa.phone_init_basic.audio_state_mode", "Audio State Mode", base.HEX, VALS_AUDIO_STATE_MODE, 0x02)
+p_request_phone_init_basic.fields.vision_2000_support = ProtoField.uint8("hfa.phone_init_basic.vision_2000_support", "Vision 2000 Support", base.HEX, VALS_VISION2000_SUPPORT, 0x01)
+
+function p_request_phone_init_basic.dissector(buf, pinfo, root)
+	root:add(p_request_phone_init_basic.fields.acoustic_filter, buf(0, 1))
+	root:add(p_request_phone_init_basic.fields.language, buf(0, 1))
+	root:add(p_request_phone_init_basic.fields.key_click_state, buf(1, 1))
+	root:add(p_request_phone_init_basic.fields.time_format, buf(1, 1))
+	root:add(p_request_phone_init_basic.fields.display_contrast, buf(1, 1))
+	root:add(p_request_phone_init_basic.fields.time_data_valid, buf(2, 1))
+	root:add(p_request_phone_init_basic.fields.seconds, buf(2, 1))
+	root:add(p_request_phone_init_basic.fields.minutes, buf(3, 1))
+	root:add(p_request_phone_init_basic.fields.phone_init_extended_follows, buf(4, 1))
+	root:add(p_request_phone_init_basic.fields.hours, buf(4, 1))
+	root:add(p_request_phone_init_basic.fields.label_contrast, buf(5, 1))
+	root:add(p_request_phone_init_basic.fields.audio_state_mode, buf(5, 1))
+	root:add(p_request_phone_init_basic.fields.vision_2000_support, buf(5, 1))
+end
+
+VALS_PHONE_ID = {
+	[0x03] = "optiSet Entry",
+	[0x08] = "optiSet Comfort",
+	[0x09] = "optiPoint 600 / optiSet Memory",
+	[0x1a] = "optiSet E advance china",
+	[0x1b] = "HLB VOP Client",
+	[0x1d] = "IPSpiritEntry",
+	[0x1e] = "IPSpiritEconomy",
+	[0x1f] = "IPSpiritStandard",
+	[0x20] = "IPSpiritAdvanced",
+	[0x21] = "IPSpiritEconomyWithEKL",
+	[0x22] = "IPSpiritStandardWithEKL",
+	[0x23] = "IPSpiritAdvancedWithEKL",
+	[0x2b] = "OpenStage 20",
+	[0x2c] = "OpenStage 40",
+	[0x2d] = "Openstage 60",
+	[0x2e] = "OpenStage 80",
+	[0x34] = "OpenScape DeskPhone IP 55",
+	[0xff] = "AcWinIP"
+}
+
+VALS_SELF_TEST = {
+	[0x00] = "Dummy result or test passsed"
+}
+
+VALS_TA_S0_CONNECTED = {
+	[0x00] = "Not connected",
+	[0x01] = "Connected"	
+}
+
+VALS_HEADSET_CONNECTED = {
+	[0x00] = "Headset not connected",
+	[0x01] = "Headset connected"
+}
+
+VALS_LAN_PHONE_OP_MODE = {
+	[0x00] = "local"
+}
+
+VALS_PHONE_INIT_DATA = {
+	[0x01] = "IP Phone init data follows"
+}
+
+VALS_LOCAL_ERROR = {
+	[0x00] = "No Error"
+}
+
+VALS_ID_EXTENSIONS = {
+	
+}
+
+p_phone_init_request = Proto("phone_init_request", "Phone Initialization Request")
+p_phone_init_request.fields.phone_id = ProtoField.uint8("hfa.phone_init_request.phone_id", "Phone Id", base.HEX, VALS_PHONE_ID)
+p_phone_init_request.fields.flags = ProtoField.uint8("hfa.phone_init_request.flags", "Flags", base.HEX)
+p_phone_init_request.fields.selftest = ProtoField.uint8("hfa.phone_init_request.selftest", "Selftest", base.HEX, VALS_SELF_TEST, 0x80)
+p_phone_init_request.fields.tas0 = ProtoField.uint8("hfa.phone_init_request.tas0", "TA S0 Indication", base.HEX, VALS_TA_S0_CONNECTED, 0x40)
+p_phone_init_request.fields.headset = ProtoField.uint8("hfa.phone_init_request.headset", "Headset Indication", base.HEX, VALS_TA_S0_CONNECTED, 0x20)
+p_phone_init_request.fields.lanPhoneOpMode = ProtoField.uint8("hfa.phone_init_request.lanPhoneOpMode", "LAN Phone Operation Mode", base.HEX, VALS_LAN_PHONE_OP_MODE, 0x10)
+p_phone_init_request.fields.init_data = ProtoField.uint8("hfa.phone_init_request.init_data", "Phone initialization data", base.HEX, VALS_PHONE_INIT_DATA, 0x08)
+p_phone_init_request.fields.phone_id_extension = ProtoField.uint8("hfa.phone_init_request.phone_id_extension", "Phone Id Extension", base.DEC, VALS_ID_EXTENSIONS, 0x07)
+p_phone_init_request.fields.local_error_reason = ProtoField.uint8("hfa.phone_init_request.local_error", "Local Error Reason", base.HEX, VALS_LOCAL_ERROR)
+
+function p_phone_init_request.dissector(buf, pinfo, root)
+	root:add(p_phone_init_request.fields.phone_id, buf(11, 1))
+	local flags = root:add(p_phone_init_request.fields.flags, buf(12, 1))
+	flags:add(p_phone_init_request.fields.selftest, buf(12, 1))
+	flags:add(p_phone_init_request.fields.tas0, buf(12, 1))
+	flags:add(p_phone_init_request.fields.headset, buf(12, 1))
+	flags:add(p_phone_init_request.fields.lanPhoneOpMode, buf(12, 1))
+	flags:add(p_phone_init_request.fields.init_data, buf(12, 1))
+	flags:add(p_phone_init_request.fields.phone_id_extension, buf(12, 1))
+	flags:add(p_phone_init_request.fields.local_error_reason, buf(13, 1))
+
+end
 
 
 p_set_display = Proto("request_set_display", "Set Display")
@@ -199,7 +412,13 @@ VALS_KEYS = {
 
 VALS_LED = {
 	[0x00] = "Off",
-	[0x01] = "On"
+	[0x01] = "On",
+	[0x02] = "On 50 - Off 50",
+	[0x03] = "On 450 - Off 50",
+	[0x04] = "On 500 - Off 500",
+	[0x05] = "On 50 - Off 100",
+	[0x06] = "On 250 - Off 250",
+	[0x07] = "On 750 - Off 750"
 }
 
 p_key = Proto("request_key", "Key")
@@ -441,6 +660,13 @@ function p_hfa_register.dissector(buf, pinfo, root)
 	end
 end
 
+p_request_ip_phone_init_data = Proto("request_ip_phone_init_data", "IP Phone Init Data")
+p_request_ip_phone_init_data.fields.ip_address = ProtoField.ipv4("request_ip_phone_init_data.ip_address", "IP Address")
+
+function p_request_ip_phone_init_data.dissector(buf, pinfo, root)
+	root:add(p_request_ip_phone_init_data.fields.ip_address, buf(5, 4))
+end
+
 p_request_part_number = Proto("request_part_number", "Part Number")
 p_request_part_number.fields.partnumber = ProtoField.string("hfa.part_number.partnumber", "Part Number", FT_STRING)
 
@@ -602,23 +828,59 @@ function p_codec_preferences.dissector(buf, pinfo, root)
 	end
 end
 
+VALS_SYSTEM_IDENTIFIER = {
+	[0x00] = "Unknown",
+	[0x01] = "HiPath3000_5000",
+	[0x02] = "HiPath4000"
+}
+
+VALS_SECURITY_PROFILE = {
+	[0x00] = "None",
+	[0x01] = "Reduced",
+	[0x02] = "Full"
+}
+
+VALS_PAYLOAD_SIGNALLING_PROTO = {
+	[0x01] = "Cornet"
+}
+
 p_register_response = Proto("hfa_register_response", "Register Response")
 p_register_response.fields.parameter = ProtoField.uint8("hfa.register_response.parameter", "Parameter", base.HEX)
 p_register_response.fields.param_length = ProtoField.uint16("hfa.register_response.param_length", "Length", base.DEC)
 p_register_response.fields.param_value = ProtoField.bytes("hfa.register_response.param_value", "Value")
+p_register_response.fields.system_identifier = ProtoField.uint8("hfa.register_response.system_identifier", "System Identifier", base.HEX, VALS_SYSTEM_IDENTIFIER)
+p_register_response.fields.major_version = ProtoField.uint8("hfa.register_response.major_version", "Major Version", base.HEX)
+p_register_response.fields.minor_version = ProtoField.uint8("hfa.register_response.minor_version", "Minor Version", base.HEX)
+p_register_response.fields.security_profile = ProtoField.uint8("hfa.register_response.security_profile", "Security Profile", base.HEX, VALS_SECURITY_PROFILE)
+p_register_response.fields.payload_signalling_proto = ProtoField.uint8("hfa.register_response.payload_signalling_proto", "Payload Signalling Protocol", base.HEX, VALS_PAYLOAD_SIGNALLING_PROTO)
 
 function p_register_response.dissector(buf, pinfo, root)
 	pinfo.cols['info'] = "Register Response"
 	local i = 0
 
 	while i < buf:len() do
-		local length = buf(i + 1, 2):uint()
-		local param = root:add(p_register_response.fields.parameter, buf(i, length + 3), buf(i, 1):uint())
-		param:add(p_register_response.fields.param_length, buf(i + 1, 2))
+		local item_length = buf(i + 1, 2):uint()
+		local item_type = buf(i, 1):uint()
 
-		param:add(p_register_response.fields.param_value, buf(i + 3, length))
+		local item = root:add(p_register_response.fields.parameter, buf(i, item_length + 3), item_type)
+		item:add(p_register_response.fields.param_length, buf(i + 1, 2))
 
-		i = i + length + 3
+		if item_type == 0x78 then
+			item:append_text(" (System Identifier)")
+			item:add(p_register_response.fields.system_identifier, buf(i + 3, 1))
+			item:add(p_register_response.fields.major_version, buf(i + 4, 1))
+			item:add(p_register_response.fields.minor_version, buf(i + 5, 1))
+		elseif item_type == 0x7b then
+			item:append_text(" (Security Profile)")
+			item:add(p_register_response.fields.security_profile, buf(i + 3, 1))
+		elseif item_type == 0x28 then
+			item:append_text(" (Payload Signalling Protocol)")
+			item:add(p_register_response.fields.payload_signalling_proto, buf(i + 3, 1))
+		else
+			item:add_expert_info(PI_UNDECODED, PI_WARN, "Unknown Item Type")
+		end
+
+		i = i + item_length + 3
 	end
 end
 
